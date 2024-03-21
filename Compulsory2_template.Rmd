@@ -17,7 +17,7 @@ output:
 urlcolor: blue
 abstract: "This is the place for your abstract (max 350 words)"
 ---
-  
+
 ```{r setup, include=FALSE}
 library(knitr)
 # Feel free to change the setting as you see fit
@@ -42,20 +42,12 @@ library("rmarkdown")
 
 <!--  Etc (load all packages needed). -->
 
-
-
-
-
 ## Introduction: Scope and purpose of your project
-
 
 ## Descriptive data analysis/statistics
 
-
 ## Methods
 
-
 ## Results and interpretation
-
 
 ## Summary

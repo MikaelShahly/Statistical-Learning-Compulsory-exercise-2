@@ -142,7 +142,7 @@ tight.layout()
 plt.show()
 ```
 
-Something seems off about Cholesterol. Extremely many seem to have 0 here. This either indicates plain errors in data or that we have many missing values here that were filled in with 0-val (which is fully possible as it seems there is no missing values. OldPeak
+Something seems off about Cholesterol. Extremely many seem to have 0 here. This either indicates plain errors in data or that we have many missing values here that were filled in with 0-val (which is fully possible as it seems there is no missing values).
 
 ```{python, fig.width = 10, fig.height = 25}
 fig, axes = plt.subplots(nrows=6, ncols=2, dpi=800)
@@ -192,7 +192,37 @@ print(data_quantitative.corr()[["Cholesterol"]].sort_values(by="Cholesterol"))
 
 There are some correlations, so we could attempt a MICE imputation on the missing values. NOTE as we plan on mainly relying on decision trees we can just set these as missing values aswell.
 
-Note: We have not handled outliers, as there are no outliers in the target lable.
+Note: We have not handled outliers which will likely affect our results. Especially if we use a model which is sensitive to outliers that have a large leverage.
+
+#### Imputation
+
+Lets start by converting our dataframe to an R dataframe in order to perform MICE on the missing values.
+
+```{r}
+library("mice")
+R_dataFrame <- as.data.frame(py$data_quantitative)
+
+tempData <- mice(R_dataFrame,m=5,maxit=50,seed=500) #using default imputation technique
+summary(tempData)
+```
+
+```{r}
+imputed_R_dataFrame <- complete(tempData,1)
+
+#lets convert back to pyhton
+imputed_dataFrame <- r_to_py(imputed_R_dataFrame)
+
+
+```
+
+```{python}
+imputed_dataFrame = r.imputed_R_dataFrame
+fig = plt.figure()
+sns.histplot(data = imputed_dataFrame, x = "Cholesterol", hue = "HeartDisease", kde=True)
+plt.show()
+```
+
+This follows the expected Gaussian distribution. NOTE: forgot to remove target labels when imputing with MICE, so we likely included some data leakage to the feature. This can cause an increase in over fitting of the model.
 
 #### Scaling
 
@@ -211,20 +241,11 @@ from sklearn.model_selection import train_test_split
 # Split data into training and test sets (80% train, 20% test)
 X_train, X_test, y_train, y_test = train_test_split(data_df.drop("HeartDisease", axis=1), data_df["HeartDisease"], test_size=0.2, random_state=42)
 
-# Split training set into training and validation sets (60% train, 20% validation)
-X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.15, random_state=42)
-```
+# Split data into training and test sets (80% train, 20% test) for hot-one encoded data
+X_train_dummy, X_test_dummy, y_train_dummy, y_test_dummy = train_test_split(data_quantitative.drop("HeartDisease", axis=1), data_df["HeartDisease"], test_size=0.2, random_state=42)
 
-With the dummy variables:
-
-```{python}
-
-# Split data into training and test sets (80% train, 20% test)
-X_train, X_test, y_train, y_test = train_test_split(data_quantitative.drop("HeartDisease", axis=1), data_df["HeartDisease"], test_size=0.2, random_state=42)
-
-
-# Split training set into training and validation sets (60% train, 20% validation)
-X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.15, random_state=42)
+# Split data into training and test sets (80% train, 20% test) for imputed data
+X_train_imp, X_test_imp, y_train_imp, y_test_imp = train_test_split(imputed_dataFrame.drop("HeartDisease", axis=1), data_df["HeartDisease"], test_size=0.2, random_state=42)
 ```
 
 The train / validation / test split will effect the bias and varience of models traied on the train data. Larger train data percentage implies less bias and higher varience. Lower train data percentage implies higher bias and lower variance.
@@ -239,31 +260,48 @@ Important hyperparamters to note are the splitting criterion, and stopping crite
 These need to be correctly chosen in order to strike a good balance between bias / variance of model.
 
 ```{python}
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import cross_val_score
+import optuna 
 
-# Create an instance of DecisionTreeClassifier
-DT_model = DecisionTreeClassifier(random_state=42)
+def objective(trial, X_train, y_train):
+    params = {
+          "max_depth": trial.suggest_int('max_depth', 5, 15),
+          "criterion": trial.suggest_categorical('criterion', ['gini', 'entropy', 'log_loss']),
+          "ccp_alpha": trial.suggest_float("ccp_alpha", 0.001, 0.1),
+          "min_samples_split": trial.suggest_int("min_samples_split", 2, 10)
+    }
 
-# Fit the model to the training data
-DT_model.fit(X_train, y_train)
+    model = DecisionTreeClassifier(random_state=42, **params)
+    cv_accuracy = cross_val_score(model, X_train_dummy, y_train_dummy, cv=8)
+    
+    return np.mean(cv_accuracy)
 
-# Make predictions on the test data
-y_pred = DT_model.predict(X_test)
-
-print(y_pred)
+study = optuna.create_study(direction='maximize')
+study.optimize(lambda trial: objective(trial, X_train, y_train), n_trials=60)
 ```
 
 ```{python}
-from sklearn.model_selection import cross_val_score
-cv_accuracy = cross_val_score(DT_model, X_train, y_train, cv=5)
+print("Best trial value:", study.best_params, study.best_value)
+```
 
+```{python}
+params = study.best_params
+
+DT_model_tuned = DecisionTreeClassifier(random_state=42, **params)
+DT_model_default = DecisionTreeClassifier(random_state=42)
+
+DT_model_tuned.fit(X_train_dummy, y_train_dummy)
+DT_model_default.fit(X_train_dummy, y_train_dummy)
+
+y_pred_tuned = DT_model_tuned.predict(X_test_dummy)
+y_pred_default = DT_model_default.predict(X_test_dummy)
 ```
 
 ```{python}
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
 # Calculate confusion matrix
-confusion_matrix_df = pd.DataFrame(data=confusion_matrix(y_test, y_pred), 
+confusion_matrix_df = pd.DataFrame(data=confusion_matrix(y_test, y_pred_tuned), 
                                    index=["True Pos", "True Neg"], 
                                    columns=["Predicted Pos", "Predicted Neg"])
 
@@ -271,46 +309,208 @@ confusion_matrix_df = pd.DataFrame(data=confusion_matrix(y_test, y_pred),
 fig = plt.figure()
 sns.heatmap(confusion_matrix_df, annot=True)
 plt.show()
+
+```
+
+```{python}
+
 ```
 
 ```{python}
 # Calculate accuracy and print
-accuracy = accuracy_score(y_test, y_pred)
-print(f"The accuracy is {accuracy}")
+accuracy = accuracy_score(y_test, y_pred_tuned)
+accuracy_default = accuracy_score(y_test, y_pred_default)
+
+print(f"The accuracy of hyperparamater tuned is: {accuracy} and the accuracy of not hyperparamater tuned is: {accuracy_default}")
 ```
 
-#### Hyperparamater tuning
+### 2) Random Forest
 
-Lets now perform hyperparamater-tuning by doing derivative-free optimization. We are then going to perform both baysian optimization (through a Tree-structured Parzen Estimator (TPE) optimization) and a particle swarm optimization.
+Lets now go through the same with a random forest model. The math behind why we should bag a tree with bootstrap samples is shown below: $var(\bar{Z}) = var{(1 / n)*\sum{Z_i}} = \frac{1}{n^2}*\sum{var{Z_i}} = \frac{\sigma^2}{n}$
+
+with correlation the last part becomes: $\text{Var}\left(\sum_{i} X_i\right) = \sum_{i}\sum_{j} \text{Cov}(X_i, X_j)$ $\text{Var}\left(\sum_{i} X_i\right) = \sum_{i}\sum_{j} \rho_{ij} \cdot \sigma_i \cdot \sigma_j$ Random Forest therefore only split
+
+For our hyperparamater tuning we have some special things to take into consideration for a Random Forest: 1) Likly there is no point in pruning the bagged trees as we likly introduce to much bias then 2) Adding more estimators will never hurt our accuracy as we are only reducing the varience more as shown by: $var(\bar{Z}) = var{(1 / n)*\sum{Z_i}} = \frac{1}{n^2}*\sum{var{Z_i}} = \frac{\sigma^2}{n}$ However for a large n the reduction will become very small and only be unneccesary train time.
+
+Based purly on intuition, it will be very important to reduce varience in the model as we have few datapoints which will cause our model to have a large varience.
 
 ```{python}
-from sklearn.model_selection import cross_val_score
-cv_accuracy = cross_val_score(DT_model, X_train, y_train, cv=5)
-```
+from sklearn.ensemble import RandomForestClassifier
 
-```{python}
-from sklearn.model_selection import cross_val_score
-def objective(trial, X_train, y_train):
+def objective(trial, x_train, y_train):
     params = {
-          max_depth = trial.suggest_int('max_depth', 5, 15)
-          criterion = trial.suggest_categorical('criterion', ['gini', 
-                                                            'entropy', 'log_loss'])
-          
-          ccp_alpha = trial.suggest_float("ccp_alpha", 0, 1)
-          
+          "max_depth": trial.suggest_int('max_depth', 5, 15),
+          "criterion": trial.suggest_categorical('criterion', ['gini', 'entropy', 'log_loss']),
+          "min_samples_split": trial.suggest_int("min_samples_split", 2, 10),
+          "max_features":  trial.suggest_categorical("max_features", ['sqrt', 'log2']),
+          "max_samples": trial.suggest_float("max_samples", 0.5, 1)
     }
 
-    model = DecisionTreeClassifier(random_state=42, **params)
-    cv_accuracy = cross_val_score(model, X_train, y_train, cv=5)
+    model = RandomForestClassifier(random_state=42, **params)
+    cv_accuracy = cross_val_score(model, X_train_dummy, y_train_dummy, cv=5)
     
-    return MAE_a
+    return np.mean(cv_accuracy)
 
-study = optuna.create_study(direction='minimize')
-study.optimize(lambda trial: objective(trial, X_train, y_train), n_trials=80)
+study = optuna.create_study(direction='maximize')
+study.optimize(lambda trial: objective(trial, X_train, y_train), n_trials=200)
 ```
+
+```{python}
+print("Best trial value:", study.best_params, study.best_value)
+```
+
+```{python}
+params_RF = {'max_depth': 15, 'criterion': 'gini', 'min_samples_split': 3, 'max_features': 'log2', 'max_samples': 0.8926729406142951}
+
+RF_model_tuned = RandomForestClassifier(random_state=42, **params_RF, n_estimators = 500)
+RF_model_default = RandomForestClassifier(random_state=42)
+
+RF_model_tuned.fit(X_train_dummy, y_train_dummy)
+RF_model_default.fit(X_train_dummy, y_train_dummy)
+
+RFy_pred_tuned = RF_model_tuned.predict(X_test_dummy)
+RFy_pred_default = RF_model_default.predict(X_test_dummy)
+```
+
+```{python}
+# Calculate accuracy and print
+accuracy = accuracy_score(y_test, RFy_pred_tuned)
+accuracy_default = accuracy_score(y_test, RFy_pred_default)
+
+print(f"The accuracy of hyperparamater tuned is: {accuracy} and the accuracy of not hyperparamater tuned is: {accuracy_default}")
+```
+
+#### Creating a analyze the effect of n_estimators for random forest
+
+Just a quick plot to confirm the math of more estimators
+
+```{python, echo = False}
+test_accuracy_list = []
+for i in range(1,300):
+    RF_model = RF_model_tuned = RandomForestClassifier(random_state=42, n_estimators = i)
+    RF_model.fit(X_train_dummy, y_train_dummy)
+    RF_pred_y = RF_model.predict(X_test_dummy)
+    accuracy_RF = accuracy_score(y_test, RF_pred_y)
+    test_accuracy_list.append(accuracy_RF)
+```
+
+```{python}
+fig = plt.figure()
+plt.plot(range(1, 300), test_accuracy_list)
+plt.show()
+```
+
+The results here clearly correlate to the theory given above, which is nice.
+
+### 3) Boosted Decision Tree
+
+We now trying to implement a boosted decision tree. This can be done from scratch using small decision trees (to ensure that we are creating an ensamble of weak learner, as the goal of boosting is primarily to decrease the bias of a weak learner and not to reduce the variance of a strong learner) and using a gradient boosting algorithm. Or we can import a finished implementation.
+
+Here we choose to use the simple gradient boosted decision tree classifier from Scikit learn. Note; we will use the HistGradientBoostedClassifier as the normal GBM tree class in Scikit-Learn does not have an inherent way to handle missing values.
+
+```{python}
+from sklearn.ensemble import HistGradientBoostingClassifier
+
+def objective(trial, x_train, y_train):
+    params = {
+          "max_depth": trial.suggest_int('max_depth', 4, 6), #typical values
+          "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.1),
+          "max_iter": trial.suggest_int("max_iter", 100, 1000),
+          "max_features": trial.suggest_categorical("max_features", [0.5, 0.8, 1.0]), #attempts to reduce varience more by randomizing features per split like random forest
+          "l2_regularization": trial.suggest_float("l2_regularization", 0.001, 0.01)
+    }
+
+    model = HistGradientBoostingClassifier(random_state=42, **params)
+    cv_accuracy = cross_val_score(model, X_train_dummy, y_train_dummy, cv=5)
+    
+    return np.mean(cv_accuracy)
+
+study = optuna.create_study(direction='maximize')
+study.optimize(lambda trial: objective(trial, X_train, y_train), n_trials=150)
+```
+
+```{python}
+print("Best trial value:", study.best_params, study.best_value)
+```
+
+```{python}
+params_GBM = {'max_depth': 4, 'learning_rate': 0.06526387443707683, 'max_iter': 143, 'max_features': 0.5, 'l2_regularization': 0.0035912380966771833}
+GBM_model_tuned = HistGradientBoostingClassifier(random_state=42, **params_GBM)
+GBM_model_default = HistGradientBoostingClassifier(random_state=42)
+
+GBM_model_tuned.fit(X_train_dummy, y_train_dummy)
+GBM_model_default.fit(X_train_dummy, y_train_dummy)
+
+GBMy_pred_tuned = GBM_model_tuned.predict(X_test_dummy)
+GBMy_pred_default = GBM_model_default.predict(X_test_dummy)
+```
+
+```{python}
+# Calculate accuracy and print
+accuracy = accuracy_score(y_test, GBMy_pred_tuned)
+accuracy_default = accuracy_score(y_test, GBMy_pred_default)
+
+print(f"The accuracy of hyperparamater tuned is: {accuracy} and the accuracy of not hyperparamater tuned is: {accuracy_default}")
+```
+
+Note: we are performing a sligh Ridge regularization above. However we have not scaled our dataset, which could lead to the Ridge Regression not performing as well as possible.
+
+#### 4) Logistic Regression
+
+```{python}
+from sklearn.linear_model import LogisticRegression
+
+def objective(trial, x, y):
+    # Define the hyperparameters to optimize
+    inverse_C = trial.suggest_loguniform('inverse_C', 1e-3, 1e4)
+    # Calculate the regularization strength C from the inverse_C
+    C = 1.0 / inverse_C
+    model = LogisticRegression(random_state=42, C=C, max_iter = 1000)
+    cv_accuracy = cross_val_score(model, X_train_imp, y_train_imp, cv=5)
+    
+    return np.mean(cv_accuracy)
+  
+
+study = optuna.create_study(direction='maximize')
+study.optimize(lambda trial: objective(trial, X_train, y_train), n_trials=150)
+```
+
+```{python}
+# Plot the optimization history
+optuna_plot = optuna.visualization.plot_slice(study)
+optuna_plot.show()
+```
+
+```{python}
+print("Best trial value:", study.best_params, study.best_value)
+```
+
+```{python}
+params_logReg = {'C': 1 / 4.290748352896671}
+logReg_model_tuned = LogisticRegression(random_state=42, **params_logReg, max_iter = 1000)
+logReg_model_default =LogisticRegression(random_state=42)
+
+logReg_model_tuned.fit(X_train_imp, y_train_imp)
+logReg_model_default.fit(X_train_imp, y_train_imp)
+
+logRegy_pred_tuned = logReg_model_tuned.predict(X_test_imp)
+logRegy_pred_default = logReg_model_default.predict(X_test_imp)
+```
+
+```{python}
+# Calculate accuracy and print
+accuracy = accuracy_score(y_test, logRegy_pred_tuned)
+accuracy_default = accuracy_score(y_test, logRegy_pred_default)
+
+print(f"The accuracy of hyperparamater tuned is: {accuracy} and the accuracy of not hyperparamater tuned is: {accuracy_default}")
+```
+
+As logistic regression in the Scikit package is based on gradient descent ( and not doing least squares to find best estimators as the statitical way of solving it does) we likly should have scaled the data before hand for a faster convergence.
+
+We also get a better result with a relativly high regularization
 
 ## Results and interpretation
 
 ## Summary
 
-Tree-structured Parzen Estimator (TPE)
+Tree model good uga booga

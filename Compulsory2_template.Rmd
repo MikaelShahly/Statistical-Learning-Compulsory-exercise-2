@@ -17,7 +17,7 @@ output:
 urlcolor: blue
 abstract: "This is the place for your abstract (max 350 words)"
 ---
-  
+
 ```{r setup, include=FALSE}
 library(knitr)
 # Feel free to change the setting as you see fit
@@ -29,8 +29,6 @@ knitr::opts_chunk$set(echo = TRUE,
                       prompt = FALSE,
                       cache = TRUE,
                       size = "scriptsize",
-                      fig.width = 4,
-                      fig.height = 3,
                       fig.align = "center")
 
 ```
@@ -38,24 +36,281 @@ knitr::opts_chunk$set(echo = TRUE,
 ```{r, eval=TRUE, echo=FALSE}
 library("knitr")
 library("rmarkdown")
+library("reticulate")
+library("ggplot2")
+library("gridExtra")
+options(reticulate.plot.repr = TRUE)
 ```
 
 <!--  Etc (load all packages needed). -->
 
-
-
-
-
 ## Introduction: Scope and purpose of your project
-
 
 ## Descriptive data analysis/statistics
 
+```{python}
+#importing necessary datasets and python packages 
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pylab as plt
+import seaborn as sns
+plt.style.use('ggplot')
+
+data_df = pd.read_csv("heart.csv")
+```
+
+Lets start by getting a general overview of each column, if they are quantitative / qualitative and the shape of their distributions through a KDE.
+
+```{python, fig.width = 10, fig.height = 18}
+fig, axes = plt.subplots(nrows=4, ncols=3, dpi=800)
+axes = axes.flatten()
+
+for i, column in enumerate(data_df.columns):
+    sns.histplot(data=data_df, x = column, kde=True, ax=axes[i], hue ="HeartDisease")
+    axes[i].set_xlabel(column, fontsize = 15)
+    axes[i].grid(True)
+
+tight.layout()
+plt.show()
+```
+
+```{python}
+print(data_df.describe().iloc[:, :3])
+print(data_df.describe().iloc[:, 3:])
+```
+
+```{python}
+data_df.info()
+```
+
+*NOTE: NO MISSING DATA!* Checking the correlation between the target lable and predictors. We start by converting the qualitative predictors to quantitative by making dummy variables
+
+```{python}
+dummy_gender = pd.get_dummies(data_df['Sex'], prefix='sex', drop_first=True)
+dummy_ChestPainType = pd.get_dummies(data_df['ChestPainType'], prefix='ChestPainType', drop_first=True)
+dummy_RestingECG = pd.get_dummies(data_df['RestingECG'], prefix='RestingECG', drop_first=True)
+dummy_ExerciseAngina = pd.get_dummies(data_df['ExerciseAngina'], prefix='ExerciseAngina', drop_first=True)
+dummy_St_Slope = pd.get_dummies(data_df['ST_Slope'], prefix='ST_Slope', drop_first=True)
+
+
+data_quantitative = pd.concat([data_df.drop(['Sex', 'ChestPainType', 'RestingECG', 'ExerciseAngina', 'ST_Slope'], axis=1), dummy_gender, dummy_ChestPainType, dummy_RestingECG, dummy_ExerciseAngina, dummy_St_Slope], axis=1)
+```
+
+```{python}
+print(data_quantitative.corr()[["HeartDisease"]].sort_values(by="HeartDisease"))
+```
+
+based on this, all the predictors have a relativly high correlation to the target lable, with ST_Slope_FLat and ST_Slope_UP being some of the most important. More in-depth plots of the most important predictors. Lets also make check the complete correlation matrix.
+
+NOTE: ANOVA test for numerical features and CHI-SQUARED test for categorical features can also be performed
+
+```{python,  fig.width = 22, fig.height = 24}
+fig = plt.figure()
+sns.heatmap(data_quantitative.corr(), annot = True, annot_kws={"size": 20})
+plt.yticks(fontsize=28)
+plt.xticks(fontsize=28)
+plt.show()
+```
+
+Now lets quickly make some box plots to check for outliers. Lets also make some quick scatterplots to ensure that there are no strange patters that indicate duplicated values.
+
+```{python, fig.width = 10, fig.height = 18}
+fig, axes = plt.subplots(nrows=2, ncols=3, dpi=800)
+axes = axes.flatten()
+
+for i, column in enumerate(data_df.drop(["Sex", "RestingECG", "ExerciseAngina", "ST_Slope", "ChestPainType"], axis=1).columns):
+    sns.boxplot(data=data_df, y = column, ax=axes[i], x ="HeartDisease")
+    axes[i].set_xlabel(column, fontsize = 15)
+    axes[i].grid(True)
+
+tight.layout()
+plt.show()
+
+```
+
+```{python, fig.width = 10, fig.height = 18}
+fig, axes = plt.subplots(nrows=2, ncols=3, dpi=800)
+axes = axes.flatten()
+
+for i, column in enumerate(data_df.drop(["Sex", "RestingECG", "ExerciseAngina", "ST_Slope", "ChestPainType"], axis=1).columns):
+    sns.violinplot(data=data_df, y = column, ax=axes[i], x ="HeartDisease")
+    axes[i].set_xlabel(column, fontsize = 15)
+    axes[i].grid(True)
+
+tight.layout()
+plt.show()
+```
+
+Something seems off about Cholesterol. Extremely many seem to have 0 here. This either indicates plain errors in data or that we have many missing values here that were filled in with 0-val (which is fully possible as it seems there is no missing values. OldPeak
+
+```{python, fig.width = 10, fig.height = 25}
+fig, axes = plt.subplots(nrows=6, ncols=2, dpi=800)
+axes = axes.flatten()
+
+for i, column in enumerate(data_df.columns):
+    sns.scatterplot(data=data_df, x = data_df.index, y = column, ax=axes[i], hue ="HeartDisease")
+    axes[i].set_title(column)
+    axes[i].set_ylabel("")
+    axes[i].grid(True)
+
+tight.layout()
+plt.show()
+```
+
+Nothing immediately stands out other then 1 person having 0 in Resting BP, which is likely a data error. We also see the 0 value cholesterol people that also is likely an error.
+
+### Manipulating given the dataset
+
+Lets start by removing the strange cholesterol values.
+
+```{python}
+chol_zero = data_df[data_df["Cholesterol"] == 0]
+data_df.loc[data_df["Cholesterol"] == 0, "Cholesterol"] = pd.NA
+data_quantitative.loc[data_quantitative["Cholesterol"] == 0, "Cholesterol"] = pd.NA
+```
+
+this is alot of values. Either the entire col needs to be dropped the rows need to be dropped (which is not realistic). Lets analyze this data to check for trends. If not we can drop the col or attempt to impute the data by MICE
+
+```{python, fig.width = 10, fig.height = 8}
+fig, axes = plt.subplots(nrows=2, ncols=2, dpi=800)
+axes = axes.flatten()
+
+for i, column in enumerate(chol_zero.columns):
+    sns.histplot(data=chol_zero, x = column, kde=True, ax=axes[i], hue ="HeartDisease")
+    axes[i].set_title(column, fontsize = 15)
+    axes[i].set_xlabel("")
+    axes[i].grid(True)
+
+tight.layout()
+plt.show()
+```
+
+```{python}
+print(data_quantitative.corr()[["Cholesterol"]].sort_values(by="Cholesterol"))
+```
+
+There are some correlations, so we could attempt a MICE imputation on the missing values. NOTE as we plan on mainly relying on decision trees we can just set these as missing values aswell.
+
+Note: We have not handled outliers, as there are no outliers in the target lable.
+
+#### Scaling
+
+consider scaling data
+
+.
 
 ## Methods
 
+We will start by creating Decision Tree models (normal / Random Forest / Bagged / Boosted) as they can hadle our missing values well and are also not very sensitive to outliers in perdictor values (which is good, as we have not done a through analysis and handling of potential outliers).
+
+```{python}
+from sklearn.model_selection import train_test_split
+
+# Assuming X contains features and y contains labels/target variable
+# Split data into training and test sets (80% train, 20% test)
+X_train, X_test, y_train, y_test = train_test_split(data_df.drop("HeartDisease", axis=1), data_df["HeartDisease"], test_size=0.2, random_state=42)
+
+# Split training set into training and validation sets (60% train, 20% validation)
+X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.15, random_state=42)
+```
+
+With the dummy variables:
+
+```{python}
+
+# Split data into training and test sets (80% train, 20% test)
+X_train, X_test, y_train, y_test = train_test_split(data_quantitative.drop("HeartDisease", axis=1), data_df["HeartDisease"], test_size=0.2, random_state=42)
+
+
+# Split training set into training and validation sets (60% train, 20% validation)
+X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.15, random_state=42)
+```
+
+The train / validation / test split will effect the bias and varience of models traied on the train data. Larger train data percentage implies less bias and higher varience. Lower train data percentage implies higher bias and lower variance.
+
+#### 1) Decision Tree
+
+lets create a basic decision tree using SKLearn default tree classifier. The default hyperparamaters are:\
+(*\**, *criterion=['gini']{.underline}*, *splitter=['best']{.underline}*, *max_depth=[None]{.underline}*, *min_samples_split=[2]{.underline}*, *min_samples_leaf=[1]{.underline}*, *min_weight_fraction_leaf=[0.0]{.underline}*, *max_features=[None]{.underline}*, *random_state=[None]{.underline}*, *max_leaf_nodes=[None]{.underline}*, *min_impurity_decrease=[0.0]{.underline}*, *class_weight=[None]{.underline}*, *ccp_alpha=[0.0]{.underline}*, *monotonic_cst=[None]{.underline}*)[[source]](https://github.com/scikit-learn/scikit-learn/blob/f07e0138b/sklearn/tree/_classes.py#L698)[¶](https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeClassifier.html#sklearn.tree.DecisionTreeClassifier "Link to this definition").
+
+Important hyperparamters to note are the splitting criterion, and stopping criteria such as: max_leaf_nodes, max_depth, min_impurity_decrease...
+
+These need to be correctly chosen in order to strike a good balance between bias / variance of model.
+
+```{python}
+from sklearn.tree import DecisionTreeClassifier
+
+# Create an instance of DecisionTreeClassifier
+DT_model = DecisionTreeClassifier(random_state=42)
+
+# Fit the model to the training data
+DT_model.fit(X_train, y_train)
+
+# Make predictions on the test data
+y_pred = DT_model.predict(X_test)
+
+print(y_pred)
+```
+
+```{python}
+from sklearn.model_selection import cross_val_score
+cv_accuracy = cross_val_score(DT_model, X_train, y_train, cv=5)
+
+```
+
+```{python}
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+
+# Calculate confusion matrix
+confusion_matrix_df = pd.DataFrame(data=confusion_matrix(y_test, y_pred), 
+                                   index=["True Pos", "True Neg"], 
+                                   columns=["Predicted Pos", "Predicted Neg"])
+
+# Plot confusion matrix
+fig = plt.figure()
+sns.heatmap(confusion_matrix_df, annot=True)
+plt.show()
+```
+
+```{python}
+# Calculate accuracy and print
+accuracy = accuracy_score(y_test, y_pred)
+print(f"The accuracy is {accuracy}")
+```
+
+#### Hyperparamater tuning
+
+Lets now perform hyperparamater-tuning by doing derivative-free optimization. We are then going to perform both baysian optimization (through a Tree-structured Parzen Estimator (TPE) optimization) and a particle swarm optimization.
+
+```{python}
+from sklearn.model_selection import cross_val_score
+cv_accuracy = cross_val_score(DT_model, X_train, y_train, cv=5)
+```
+
+```{python}
+from sklearn.model_selection import cross_val_score
+def objective(trial, X_train, y_train):
+    params = {
+          max_depth = trial.suggest_int('max_depth', 5, 15)
+          criterion = trial.suggest_categorical('criterion', ['gini', 
+                                                            'entropy', 'log_loss'])
+          
+          ccp_alpha = trial.suggest_float("ccp_alpha", 0, 1)
+          
+    }
+
+    model = DecisionTreeClassifier(random_state=42, **params)
+    cv_accuracy = cross_val_score(model, X_train, y_train, cv=5)
+    
+    return MAE_a
+
+study = optuna.create_study(direction='minimize')
+study.optimize(lambda trial: objective(trial, X_train, y_train), n_trials=80)
+```
 
 ## Results and interpretation
 
-
 ## Summary
+
+Tree-structured Parzen Estimator (TPE)

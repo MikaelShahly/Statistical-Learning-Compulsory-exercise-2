@@ -453,7 +453,7 @@ accuracy_default = accuracy_score(y_test, GBMy_pred_default)
 print(f"The accuracy of hyperparamater tuned is: {accuracy} and the accuracy of not hyperparamater tuned is: {accuracy_default}")
 ```
 
-Note: we are performing a sligh Ridge regularization above. However we have not scaled our dataset, which could lead to the Ridge Regression not performing as well as possible.
+Note: we are performing a sligh Ridge regularization above. However we have not scaled our dataset, which could lead to the Ridge Regression not performing as well as possible. Note, doing a stochastic GBM model could also be good here to try to reduce varience more.
 
 #### 4) Logistic Regression
 
@@ -507,10 +507,10 @@ print(f"The accuracy of hyperparamater tuned is: {accuracy} and the accuracy of 
 
 As logistic regression in the Scikit package is based on gradient descent ( and not doing least squares to find best estimators as the statitical way of solving it does) we likly should have scaled the data before hand for a faster convergence.
 
-We also get a better result with a relativly high regularization
+We also get a better result with a relatively high regularization, which again correlates with the idea that reducing variance is one of the main factors here as we overall have a relatively small amount of data.
 
 ## Results and interpretation
 
 ## Summary
 
-Tree model good uga booga
+Tree model good uga booga.

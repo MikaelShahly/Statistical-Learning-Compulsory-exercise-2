@@ -617,6 +617,8 @@ Logistic Regression model:
     Tuned model: 0.8532608695652174
     Default model: 0.8695652173913043
     
+It is important to note that the results may vary depending on which variables get selceted in the test and training dataset and by optuna.
+    
 As we can see the most accurate model is the histogram-based boosting classification tree (HistGradientBoostedClassifier). This is not a very surprising result as boosted decision trees are at the forefront of prediction accuracy when it comes to tabular data. However being an ensamble method, interpretation of the model is quite difficult as we are working with an ensamble of different trees. So to get the best model we are sacrificing readability. This also applies to Random Forest decision trees. The most readable would be the decision tree, if properly pruned, or the logistic regression model. For the decision tree model you could make a very readable flowchart, although it would be quite big without pruning. And for the logistical model we would simply check the coefficients to get a better understanding of which of the predictors matters the most.
 
 The decision tree models offer us more flexibility than the logistical regression method as we are can create a huge variety in different models based on how many sections we create in the predictor space. Therefor controlling the variance with either pruning or by creating an ensamble of trees is important to avoid overfitting. That is one of the reasons the random forest and the boosted tree outperform the regular decision tree model.

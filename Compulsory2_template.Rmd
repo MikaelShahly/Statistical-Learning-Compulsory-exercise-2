@@ -15,7 +15,7 @@ output:
     toc: no
     toc_depth: '2'
 urlcolor: blue
-abstract: "This is the place for your abstract (max 350 words)"
+abstract: "In this project we are solving a classification problem with the Heart Failur prediction dataset. We implement 4 different categorization methodes to try to predict whether a person will suffer heart diseas or not, and our goal was to verify if boosted decision trees are the most accurate models. We utilized several python libraries to do hyperparameter optimization, data analysis and modeling. The classifications methodes we utilized was default decision trees, Random forest classification trees, Histogram-based boosted classification trees and logistical regression. We found that the Histogram-based boosted classification tree performed the best, with test-accuracy of 88.69%"
 ---
 
 ```{r setup, include=FALSE}

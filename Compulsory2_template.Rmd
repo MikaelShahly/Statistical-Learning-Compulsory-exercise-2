@@ -96,6 +96,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pylab as plt
 import seaborn as sns
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import cross_val_score
@@ -578,36 +579,45 @@ We made 8 different models in total. Two models per method, one where we used op
 
 Decision Tree:
   Best hyperparameters:
+    'max_depth': 10
+    'criterion': 'log_loss'
+    'ccp_alpha': 0.0448131855142171
+    'min_samples_split': 5
   
   Test accuracy:
-    Tuned model:
-    Default values:
+    Tuned model: 0.842391304347826
+    Default values: 0.8369565217391305
 
 Random Forest Decision Tree:
-  Best hyperparameters:
+  Best hyperparameters: 'max_depth': 10
+  'criterion': 'entropy'
+  'min_samples_split': 3
+  'max_features': 'log2'
+  'max_samples': 0.8740617797189453
   
   Test accuracy:
-    Tuned model:
-    Default model:
+    Tuned model:0.8695652173913043
+    Default model: 0.8695652173913043
 
 HistGradientBoostedClassifier model:
   Best hyperparameters: 
-    'max_depth': 4
-    'learning_rate': 0.06526387443707683
-    'max_iter': 143
+    'max_depth': 6
+    'learning_rate': 0.017851462759686236
+    'max_iter': 465
     'max_features': 0.5
-    'l2_regularization': 0.0035912380966771833
+    'l2_regularization': 0.009010122553197338
   
   Test accuracy:
-    Tuned hyperparameters: 0.885869652173914
+    Tuned hyperparameters: 0.8858695652173914
     Default hyperparameters: 0.8804347826086957
 
 Logistic Regression model:
   Best hyperparameters:
+    'lambda': 4.195417061279373
   
   Test Accuracy:
-    Tuned model:
-    Default model:
+    Tuned model: 0.8532608695652174
+    Default model: 0.8695652173913043
     
 As we can see the most accurate model is the histogram-based boosting classification tree(HistGradientBoostedClassifier). This is not a very surprising result as bosoted decision trees are at the forefront of prediction accuracy when it comes to tabular data. However beaing an ensamble method interpretation of the model is quite difficult,as we are working with an ensamble of different trees. So to get the best model we are sacrificing readability. This also applies to Random Forest decision trees. The most readable would be the decision tree, if properly pruned, or the logistic regression model. For the decision tree model you could make a very readable flowchart, although it would be quite big without pruning. And for the logistical model we would simply check the coefficients to get a better understanding of which of the predictors matters the most.
 

@@ -1,10 +1,7 @@
 ---
-title: "Compulsory Exercise 2: Title (give your project an informative title)"
+title: "Compulsory Exercise 2, Group 31: Clasification of Heart Disease"
 author:
-- Full name for group member \#1.
-- Full name for group member \#2.
-- Full name for group member \#3.
-date: "`r format(Sys.time(), '%d %B, %Y')`"
+date: "`April 15. 2024"
 header-includes: \usepackage{amsmath}
 output:
   # html_document:

@@ -71,7 +71,7 @@ for i, column in enumerate(data_df.columns):
     axes[i].set_xlabel(column, fontsize = 15)
     axes[i].grid(True)
 
-tight.layout()
+
 plt.show()
 ```
 
@@ -124,7 +124,7 @@ for i, column in enumerate(data_df.drop(["Sex", "RestingECG", "ExerciseAngina", 
     axes[i].set_xlabel(column, fontsize = 15)
     axes[i].grid(True)
 
-tight.layout()
+
 plt.show()
 
 ```
@@ -138,7 +138,7 @@ for i, column in enumerate(data_df.drop(["Sex", "RestingECG", "ExerciseAngina", 
     axes[i].set_xlabel(column, fontsize = 15)
     axes[i].grid(True)
 
-tight.layout()
+
 plt.show()
 ```
 
@@ -154,7 +154,7 @@ for i, column in enumerate(data_df.columns):
     axes[i].set_ylabel("")
     axes[i].grid(True)
 
-tight.layout()
+
 plt.show()
 ```
 
@@ -182,7 +182,7 @@ for i, column in enumerate(chol_zero.columns):
     axes[i].set_xlabel("")
     axes[i].grid(True)
 
-tight.layout()
+
 plt.show()
 ```
 
@@ -261,6 +261,7 @@ These need to be correctly chosen in order to strike a good balance between bias
 
 ```{python}
 from sklearn.model_selection import cross_val_score
+from sklearn.tree import DecisionTreeClassifier
 import optuna 
 
 def objective(trial, X_train, y_train):
@@ -352,7 +353,7 @@ def objective(trial, x_train, y_train):
     return np.mean(cv_accuracy)
 
 study = optuna.create_study(direction='maximize')
-study.optimize(lambda trial: objective(trial, X_train, y_train), n_trials=200)
+study.optimize(lambda trial: objective(trial, X_train, y_train), n_trials=60)
 ```
 
 ```{python}
@@ -360,7 +361,7 @@ print("Best trial value:", study.best_params, study.best_value)
 ```
 
 ```{python}
-params_RF = {'max_depth': 15, 'criterion': 'gini', 'min_samples_split': 3, 'max_features': 'log2', 'max_samples': 0.8926729406142951}
+params_RF = {'max_depth': 14, 'criterion': 'gini', 'min_samples_split': 7, 'max_features': 'log2', 'max_samples': 0.8781738683197857}
 
 RF_model_tuned = RandomForestClassifier(random_state=42, **params_RF, n_estimators = 500)
 RF_model_default = RandomForestClassifier(random_state=42)
@@ -426,7 +427,7 @@ def objective(trial, x_train, y_train):
     return np.mean(cv_accuracy)
 
 study = optuna.create_study(direction='maximize')
-study.optimize(lambda trial: objective(trial, X_train, y_train), n_trials=150)
+study.optimize(lambda trial: objective(trial, X_train, y_train), n_trials=60)
 ```
 
 ```{python}

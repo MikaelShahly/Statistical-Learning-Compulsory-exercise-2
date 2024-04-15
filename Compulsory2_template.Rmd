@@ -46,7 +46,48 @@ options(reticulate.plot.repr = TRUE)
 
 ## Introduction: Scope and purpose of your project
 
+In this project we are using the Heart failure prediction dataset, given to us in the problem description, to try to create a model which can predict if a patient will suffer a heart disease or not. This is  a classification task, where where a value of 1 represents heart disease while 0 represents a healthy condition. We want to try to create the most accurate, lowest test error, model possible for us.
+
+Since we know very little about heart disease and we are relatively inexperienced with statistical learning more specifically our goal is to test some different models and find which of them is the most accurate. We do not aspire to create the most readable model or necesearily the most robust model, we simply seek to check which of the tree models perform the best for this kind of dataset, and if decision trees outperform a MLR model. We want to test this as it has been stated that Boosted decision trees are the stat of the art models in statistical learning, and we want to check for ourselves if this is true or not. We will be doing hyperparameter tuning to try to increase the performance, but we will check our values against the default hyperparameters in case they outperform what we select. We will be working in python and utilizing several libraries which enable us to do the statistical modeling, hyperparameter tuning, plotting, etc. From this you could say that we are the audience and we are working on testing whether we can excecute what we have learned so far in statistical modeling, and weather some of the claims that has been proposed in the lecture are true or not.
+
+Just for reference, you need to ahve the following python libraries installed on your computer to properly run the code:
+- pandas
+- numpy
+- matplotlib
+- seaborn
+- optuna
+- scikit-learn (This is the new library that has replaced sklearn which we have used, if you install this it should work)
+
+Our source is the fedesoriano. (September 2021). Heart Failure Prediction Dataset. Retrieved [14.04.2024] from https://www.kaggle.com/fedesoriano/heart-failure-prediction, which is an aggregated dataset created from different datasets. We have the following breakdown:
+
+Cleveland: 303 observations
+Hungarian: 294 observations
+Switzerland: 123 observations
+Long Beach VA: 200 observations
+Stalog (Heart) Data Set: 270 observations
+
+Total observations: 1190, with 272 duplicated observations.
+
+Which gives a final dataset of 918 unique observations.
+
+The dataset contains 12 attributes per observation, this is the description given:
+
+1. Age: age of patient [years]
+2. Sex: sex of the patient [M: male, F: female]
+3. ChestPainType: chest pain type [TA: typical angina, ATA: atypical angina, NAP: non-anginal pain, ASY: asymptomatic]
+4. REstingBP: resting blood pressure [mm Hg]
+5. Cholesterol: serum cholesterol [mm/dl]
+6. FastingBS: fasting blood sugar [1: if fastingBS > 120 mg/dl, 0: otherwise]
+7. RestingECG: resting electrocardiogram results  [Normal: Normal, ST: having ST-T wave abnormality (T wave inversions and/or ST elevation or depression of > 0.05 mV), LVH: showing probable or definite left ventricular hypertrophy by Estes' criteria]
+8. MaxHR: maximum heart rate achieved [Numeic value between 60 and 202]
+9. ExerciseAngina: exercise-induced angina [Y: Yes, N: No]
+10. Oldpeak: oldpeak = ST [Numeric value measured in depression]
+11. ST_Slope: the slope of the peak exercise ST segment [Up: upsloping, Flat: flat, Down: downsloping]
+12. HeartDisease: output class [1: heart disease, 0: normal]
+
 ## Descriptive data analysis/statistics
+
+First of all we can note that our dataset seems to consist of mostly european and north american studies. This will introduce a bias into our data, in comparison to a dataset which contains samples from across the world. This makes our model more suited to similar populations, and it will probably be less accurate if we begin to apply it to African or Asian countries. It is very difficult to say how much of a difference, if any, it will make, but it is worth noting.  
 
 ```{python}
 #importing necessary datasets and python packages 
@@ -55,6 +96,14 @@ import pandas as pd
 import numpy as np
 import matplotlib.pylab as plt
 import seaborn as sns
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score
+import optuna 
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
+
 plt.style.use('ggplot')
 
 data_df = pd.read_csv("heart.csv")
@@ -224,6 +273,9 @@ plt.show()
 
 This follows the expected Gaussian distribution. NOTE: forgot to remove target labels when imputing with MICE, so we likely included some data leakage to the feature. This can cause an increase in over fitting of the model.
 
+### is this gaussian? it doesnt look symmetrical enough, maybe weibull?
+
+
 #### Scaling
 
 consider scaling data
@@ -232,11 +284,9 @@ consider scaling data
 
 ## Methods
 
-We will start by creating Decision Tree models (normal / Random Forest / Bagged / Boosted) as they can hadle our missing values well and are also not very sensitive to outliers in perdictor values (which is good, as we have not done a through analysis and handling of potential outliers).
+We will start by creating Decision Tree models (normal / Random Forest / Bagged / Boosted) as they can handle our missing values well and are also not very sensitive to outliers in predictor values (which is good, as we have not done a thorough analysis and handling of potential outliers).
 
 ```{python}
-from sklearn.model_selection import train_test_split
-
 # Assuming X contains features and y contains labels/target variable
 # Split data into training and test sets (80% train, 20% test)
 X_train, X_test, y_train, y_test = train_test_split(data_df.drop("HeartDisease", axis=1), data_df["HeartDisease"], test_size=0.2, random_state=42)
@@ -260,8 +310,7 @@ Important hyperparamters to note are the splitting criterion, and stopping crite
 These need to be correctly chosen in order to strike a good balance between bias / variance of model.
 
 ```{python}
-from sklearn.model_selection import cross_val_score
-import optuna 
+
 
 def objective(trial, X_train, y_train):
     params = {
@@ -298,7 +347,7 @@ y_pred_default = DT_model_default.predict(X_test_dummy)
 ```
 
 ```{python}
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+
 
 # Calculate confusion matrix
 confusion_matrix_df = pd.DataFrame(data=confusion_matrix(y_test, y_pred_tuned), 
@@ -311,11 +360,6 @@ sns.heatmap(confusion_matrix_df, annot=True)
 plt.show()
 
 ```
-
-```{python}
-
-```
-
 ```{python}
 # Calculate accuracy and print
 accuracy = accuracy_score(y_test, y_pred_tuned)
@@ -335,7 +379,7 @@ For our hyperparamater tuning we have some special things to take into considera
 Based purly on intuition, it will be very important to reduce varience in the model as we have few datapoints which will cause our model to have a large varience.
 
 ```{python}
-from sklearn.ensemble import RandomForestClassifier
+
 
 def objective(trial, x_train, y_train):
     params = {
@@ -409,7 +453,7 @@ We now trying to implement a boosted decision tree. This can be done from scratc
 Here we choose to use the simple gradient boosted decision tree classifier from Scikit learn. Note; we will use the HistGradientBoostedClassifier as the normal GBM tree class in Scikit-Learn does not have an inherent way to handle missing values.
 
 ```{python}
-from sklearn.ensemble import HistGradientBoostingClassifier
+
 
 def objective(trial, x_train, y_train):
     params = {
@@ -458,7 +502,7 @@ Note: we are performing a sligh Ridge regularization above. However we have not 
 #### 4) Logistic Regression
 
 ```{python}
-from sklearn.linear_model import LogisticRegression
+
 
 def objective(trial, x, y):
     # Define the hyperparameters to optimize
@@ -510,6 +554,75 @@ As logistic regression in the Scikit package is based on gradient descent ( and 
 We also get a better result with a relatively high regularization, which again correlates with the idea that reducing variance is one of the main factors here as we overall have a relatively small amount of data.
 
 ## Results and interpretation
+
+What we need: 
+1 & 2:
+- list of models and hyperparameters used
+    - use 
+- barchart of accuracy for the different models (not doable right now)
+- Discussion about which is the best performer
+  - Bias variance trade off
+  - computational cost
+  - flexibility
+  - raw performance
+  -was hyperparamer optimization worth it? time/performance increase -> most likely no
+  - Should we make a model that overpredicts heart failure? better to err on the safe side with      so dire consequences
+  - any predictors that are noteable? can we even get that information from the decision tree
+    models?
+
+3.
+  - Population bias
+  -says nothing about the time frame, only if its likely or not, can we use the model in time? or     does the predictors work to fast to test?
+
+We made 8 different models in total. Two models per method, one where we used optuna to tune the hyperparameters, and one where we used the default values form the libraries. This is an overwiev of the different models:
+
+Decision Tree:
+  Best hyperparameters:
+  
+  Test accuracy:
+    Tuned model:
+    Default values:
+
+Random Forest Decision Tree:
+  Best hyperparameters:
+  
+  Test accuracy:
+    Tuned model:
+    Default model:
+
+HistGradientBoostedClassifier model:
+  Best hyperparameters: 
+    'max_depth': 4
+    'learning_rate': 0.06526387443707683
+    'max_iter': 143
+    'max_features': 0.5
+    'l2_regularization': 0.0035912380966771833
+  
+  Test accuracy:
+    Tuned hyperparameters: 0.885869652173914
+    Default hyperparameters: 0.8804347826086957
+
+Logistic Regression model:
+  Best hyperparameters:
+  
+  Test Accuracy:
+    Tuned model:
+    Default model:
+    
+As we can see the most accurate model is the histogram-based boosting classification tree(HistGradientBoostedClassifier). This is not a very surprising result as bosoted decision trees are at the forefront of prediction accuracy when it comes to tabular data. However beaing an ensamble method interpretation of the model is quite difficult,as we are working with an ensamble of different trees. So to get the best model we are sacrificing readability. This also applies to Random Forest decision trees. The most readable would be the decision tree, if properly pruned, or the logistic regression model. For the decision tree model you could make a very readable flowchart, although it would be quite big without pruning. And for the logistical model we would simply check the coefficients to get a better understanding of which of the predictors matters the most.
+
+The decision tree models offer us more flexibility than the logistical regression method as we are can create a huge variety in different models based on how many sections we create in the predictor space. Therefor controlling the variance with either pruning or by creating an ensamble of trees is important to avoid overfitting. That is one of the reasons the random forest and the boosted tree outperform the regular decision tree model.
+
+For the hyperparameter optimization we can see that we managed to improve it for the most accurat model, which is the most important. However the tuning with optuna introduced a heavy computational cost, as it was by far the optuna chunks that required the most time to run. Determining if it was worth it or not all depends on how highly you value accuracy. In the case of predicting heart disease the costs of a false negative is so high that it is probably worth spending a lot of time and resources to improve the model even slight amounts. So if this was supposed to be used by doctors we could have spent even more time on fine tuning the hyperparameters.
+
+On the note of cost of failure we can argue that, given that the models are supposed to be used by doctors for treatnment of pasients, we should try to make a oversensitive model. That means that we should probably over categorize the heart disease population even though it hurts our accuracy, because the cost of a false negative is much higher than the cost of a false positive. We would of course much rather overtreat than undertreat when undertreatment can lead to death. That holds true until we have a capacity problem, which would cause the cost of a false positive to rise as we near the hospitals capacity. We could solve this by making a different models depending on if capacity is a problem or not, or we could maybe change what we are trying to predict from heart disease to death based of heart disease. That should allow us to add in a predictor value to represnt a capacity penalty, although this seems to be outside of the scope of the course.
+
+Another aspect to note is that our we are try to predict if a person will get heart disease in head of time, because thats what is valuable, and not whether they have it right now or not. And to do this we are using data which only include if people have heart disease at the moment me observ them or not. This mean that we exclude some of the people who's predictors don't change but they will develop heart disease in the near future. And those people are closer to what we want to predict than who we use as positives right now. Thus our model is trained on something else than what we actually want to predict, and we have introduced a temporal bias into our models.
+
+Also as we have mentioned before, there is a clear bias in our population compared to the global population. We have mostly people in the region of Europe and North America, which makes our models have a bias towards similar populations. How much of a bias we introduce by not including a more global population is unknown and impossible to quantify without another dataset or testing the models on a more global population, but however small there is likely to be some bias because of this.
+
+
+
 
 ## Summary
 
